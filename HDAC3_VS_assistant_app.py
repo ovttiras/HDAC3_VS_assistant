@@ -93,7 +93,7 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
  # Download experimental data
 df = pd.read_csv('datasets/HDAC3_exp_data_inchi.csv')
 res = (df.groupby("inchi").apply(lambda x: x.drop(columns="inchi").to_dict("records")).to_dict())
-df_tox = pd.read_csv('datasets/rat_oral_LD50_inchi.csv')
+df_tox = pd.read_csv('datasets/mouse_intravenous_LD50_inchi.csv')
 res_tox = (df_tox.groupby("inchi").apply(lambda x: x.drop(columns="inchi").to_dict("records")).to_dict())
 
 
