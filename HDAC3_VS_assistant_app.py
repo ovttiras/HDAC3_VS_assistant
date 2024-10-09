@@ -8,6 +8,7 @@ from numpy import loadtxt
 import numpy as np
 import pandas as pd
 import streamlit as st
+import joblib
 import pickle
 from PIL import Image
 from rdkit import Chem, DataStructs
@@ -109,20 +110,20 @@ def rdkit_numpy_convert(f_vs):
 # HDAC2 activity models
 with zipfile.ZipFile('Models/HDAC3_SVM_MF.zip', 'r') as zip_file_svm:
     zf_svm=zip_file_svm.extract('HDAC3_SVM_MF.pkl', '.')
-load_model_SVM=pickle.load(open(zf_svm,'rb'))
+load_model_SVM=joblib.load(zf_svm)
 
 with zipfile.ZipFile('Models/HDAC3_GBR_MF.zip', 'r') as zip_file_gbr:
     zf_gbr=zip_file_gbr.extract('HDAC3_GBR_MF.pkl', '.')
-load_model_GBR=pickle.load(open(zf_gbr,'rb'))
+load_model_GBR=joblib.load(zf_gbr)
 
 # Toxicity models
 with zipfile.ZipFile('Models/Toxicity/LD50_mouse_intravenous_SVM_MF.zip', 'r') as zip_file_svm_tox:
     zf_tox=zip_file_svm_tox.extract('LD50_mouse_intravenous_SVM_MF.pkl', '.')
-load_model_SVM_tox=pickle.load(open(zf_tox,'rb'))
+load_model_SVM_tox=joblib.load(zf_tox)
 
 with zipfile.ZipFile('Models/Toxicity/LD50_mouse_intravenous_GBR_MFP.zip', 'r') as zip_file_gbr_tox:
     zf_tox_gbr=zip_file_gbr_tox.extract('LD50_mouse_intravenous_GBR_MFP.pkl', '.')
-load_model_GBR_tox=pickle.load(open(zf_tox_gbr,'rb'))
+load_model_GBR_tox=joblib.load(zf_tox_gbr)
 
 # load numpy array from csv file for hdac activity
 zf_hdac = zipfile.ZipFile('Models/x_tr_MF.zip') 
