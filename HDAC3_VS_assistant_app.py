@@ -27,48 +27,12 @@ from molvs import standardize_smiles
 from math import pi
 import zipfile
 import base64
+from rdkit.Chem.FilterCatalog import FilterCatalog, FilterCatalogParams
 
 
 ######################
 # Page Title
 ######################
-def get_img_as_base64(file):
-    with open(file, "rb") as f:
-        data = f.read()
-    return base64.b64encode(data).decode()
-
-img = get_img_as_base64("background.png")
-
-page_bg_img = f"""
-<style>
-[data-testid="stAppViewContainer"] > .main {{
-background-image: url("data:image/png;base64,{img}");
-background-size: 100%;
-background-position: top left;
-background-repeat: no-repeat;
-background-attachment: local;
-}}
-
-[data-testid="stSidebar"] > div:first-child {{
-background-image: url("data:image/png;base64,{img}");
-background-position: center; 
-background-repeat: no-repeat;
-background-attachment: fixed;
-}}
-
-[data-testid="stHeader"] {{
-background: rgba(0,0,0,0);
-}}
-
-[data-testid="stToolbar"] {{
-right: 2rem;
-}}
-</style>
-"""
-st.markdown(page_bg_img, unsafe_allow_html=True)
-
-
-
 st.write("<h1 style='text-align: center; color: #00008B;'> HDAC3_VS_assistant</h1>", unsafe_allow_html=True)
 st.write("<h3 style='text-align: center; color: black;'> Virtual screening HDAC3 inhibitors by QSAR models.</h1>", unsafe_allow_html=True)
 if st.sidebar.button('Application description'):
@@ -218,8 +182,91 @@ if files_option == 'SMILES':
             'Experimental value toxicity, Ld50': exp_tox,
             'CAS number': cas_id}, index=[1])
         predictions_pred=common_inf.astype(str) 
-        st.dataframe(predictions_pred)  
+        st.dataframe(predictions_pred)
 
+              
+        # Search for substructures and calculation of the Tanimoto index
+        substructures_df = pd.read_csv("datasets/unwanted_substructures.csv", sep="\s+")
+        # Converting SMARTS substructures into RDKit molecules
+        substructure_mols = [(row['name'], Chem.MolFromSmarts(row['smarts'])) for _, row in substructures_df.iterrows()]
+        # Creating a topological fingerprint for the original molecule
+        mol_fp = FingerprintMols.FingerprintMol(m)
+
+        # A dictionary for found substructures with their atomic indexes
+        found_substructures = {}
+
+        for name, substructure in substructure_mols:
+            if substructure:
+                match = m.GetSubstructMatch(substructure)
+                if match:
+                    found_substructures[name] = match
+        # Checking if substructures are found
+        st.header('*The most significant sub-structures that increase the inhibitory activity of HDAC3*')
+        if found_substructures:
+            # A passage through each found substructure and a display of a molecule with isolated atoms
+            for name, atoms in found_substructures.items():
+                st.write(f"The found fragment: {name}")
+
+                # Calculating the Tanimoto coefficient
+                sub_fp = FingerprintMols.FingerprintMol(substructure)
+                tanimoto_similarity = DataStructs.TanimotoSimilarity(mol_fp, sub_fp)
+                st.write(f"Tanimoto coefficient: {tanimoto_similarity:.2f}")
+
+                # visualization of a molecule with a highlighted sub-structure
+                img = Draw.MolToImage(m, highlightAtoms=atoms, size=(300, 300))
+                st.image(img)  # Display an image
+        else:
+            st.write(f"Substructures are not found in the molecule.")
+
+        # The Brenk filter
+        substructures_df = pd.read_csv("datasets/unwanted_substructures.csv", sep="\s+")
+        # Converting SMARTS substructures into RDKit molecules
+        substructure_mols = [(row['name'], Chem.MolFromSmarts(row['smarts'])) for _, row in substructures_df.iterrows()]
+
+        # A dictionary for found substructures with their atomic indexes
+        found_substructures = {}
+
+        for name, substructure in substructure_mols:
+            if substructure:
+                match = m.GetSubstructMatch(substructure)
+                if match:
+                    found_substructures[name] = match
+        # Checking if substructures are found        
+        st.header('*The Structural Alerts or Brenk filters [DOI:10.1002/cmdc.200700139] contain substructures with undesirable pharmacokinetics or toxicity*')
+        if found_substructures:
+            # A passage through each found substructure and a display of a molecule with isolated atoms
+            for name, atoms in found_substructures.items():
+                st.write(f"The found fragment: {name}")
+                # visualization of a molecule with a highlighted sub-structure
+                img = Draw.MolToImage(m, highlightAtoms=atoms, size=(300, 300))
+                st.image(img)  # Display an image
+        else:
+            st.write(f"Substructures are not found in the molecule.")  
+
+        # The PAINS filter
+        substructures_df = pd.read_csv("datasets/PAINS.csv", sep="\s+")
+        # Converting SMARTS substructures into RDKit molecules
+        substructure_mols = [(row['name'], Chem.MolFromSmarts(row['smarts'])) for _, row in substructures_df.iterrows()]
+
+        # A dictionary for found substructures with their atomic indexes
+        found_substructures = {}
+
+        for name, substructure in substructure_mols:
+            if substructure:
+                match = m.GetSubstructMatch(substructure)
+                if match:
+                    found_substructures[name] = match
+        # Checking if substructures are found        
+        st.header('*Filter for PAINS*')
+        if found_substructures:
+            # A passage through each found substructure and a display of a molecule with isolated atoms
+            for name, atoms in found_substructures.items():
+                st.write(f"The found PAINS: {name}")
+                # visualization of a molecule with a highlighted sub-structure
+                img = Draw.MolToImage(m, highlightAtoms=atoms, size=(300, 300))
+                st.image(img)  # Display an image
+        else:
+            st.write(f"PAINS are not found in the molecule.")    
 
 if files_option == '*CSV file containing SMILES':
      
