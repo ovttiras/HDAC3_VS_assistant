@@ -18,6 +18,7 @@ from rdkit.ML.Descriptors import MoleculeDescriptors
 from rdkit.Chem.Descriptors import ExactMolWt
 from rdkit.Chem.Fingerprints import FingerprintMols
 from rdkit.Chem.AllChem import GetMorganFingerprintAsBitVect
+from rdkit.Chem import PandasTools
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn import metrics
 from sklearn.metrics import pairwise_distances
@@ -70,14 +71,16 @@ def rdkit_numpy_convert(f_vs):
         output.append(arr)
         return np.asarray(output) 
 
-# LOAD MODELS
-# HDAC2 activity models
-with zipfile.ZipFile('Models/HDAC3_SVM_MF.zip', 'r') as zip_file_svm:
-    zf_svm=zip_file_svm.extract('HDAC3_SVM_MF.pkl', '.')
-load_model_SVM=joblib.load(zf_svm)
+def calcfp(mol,funcFPInfo=dict(radius=2, nBits=1024, useFeatures=False, useChirality=False)):
+    fp = AllChem.GetMorganFingerprintAsBitVect(mol, **funcFPInfo)
+    fp = pd.Series(np.asarray(fp))
+    fp = fp.add_prefix('Bit_')
+    return fp
 
-with zipfile.ZipFile('Models/HDAC3_GBR_MF.zip', 'r') as zip_file_gbr:
-    zf_gbr=zip_file_gbr.extract('HDAC3_GBR_MF.pkl', '.')
+# LOAD MODELS
+# HDAC3 activity models
+with zipfile.ZipFile('Models/HDAC3_GBR_MF_final_FS.zip', 'r') as zip_file_gbr:
+    zf_gbr=zip_file_gbr.extract('HDAC3_GBR_MF_final_FS.pkl', '.')
 load_model_GBR=joblib.load(zf_gbr)
 
 # Toxicity models
@@ -90,10 +93,15 @@ with zipfile.ZipFile('Models/Toxicity/LD50_mouse_intravenous_GBR_MFP.zip', 'r') 
 load_model_GBR_tox=joblib.load(zf_tox_gbr)
 
 # load numpy array from csv file for hdac activity
-zf_hdac = zipfile.ZipFile('Models/x_tr_MF.zip') 
-df_hdac = pd.read_csv(zf_hdac.open('x_tr_MF.csv'))
+zf_hdac = zipfile.ZipFile('Models/data3.zip') 
+df_hdac = pd.read_csv(zf_hdac.open('data3.csv'))
 x_tr=df_hdac.to_numpy()
-model_AD_limit = 4.28
+model_AD_limit = 2.78
+#load reduced descriptor
+from pathlib import Path
+path = Path('Models/feature_name_rfecv_MF.txt')
+feature_name_rfecv_MF = path.read_text().splitlines()
+
 # load numpy array from csv file for toxicity
 
 zf = zipfile.ZipFile('Models/Toxicity/x_tr_mouse_intravenous_.zip') 
@@ -116,9 +124,15 @@ if files_option == 'SMILES':
     
     
     if st.button('Run predictions!'):
-        # Calculate molecular descriptors
-        f_vs = [AllChem.GetMorganFingerprintAsBitVect(m, radius=2, nBits=1024, useFeatures=False, useChirality=False)]
-        X = rdkit_numpy_convert(f_vs)
+        # Calculate molecular descriptors        
+        desc_ws = calcfp(m)
+        f_vs_red=desc_ws[feature_name_rfecv_MF]
+        X_red = f_vs_red.to_numpy()
+        X_red=X_red.reshape(1, -1)
+
+        f_vs=desc_ws
+        X = f_vs.to_numpy()
+        X=X.reshape(1, -1)
         # HDAC activity
         # search experimental value
         if inchi in res:
@@ -130,13 +144,12 @@ if files_option == 'SMILES':
             
         else:
             # predict activity
-            prediction_RF = load_model_GBR.predict(X)
-            prediction_SVM = load_model_SVM.predict(X)
-            y_pred_con=(prediction_RF+prediction_SVM)/2
+            prediction_RF = load_model_GBR.predict(X_red)
+            y_pred_con=prediction_RF
             y_pred_con=round((y_pred_con[0]), 3)
                                     
             # Estimination AD
-            neighbors_k_vs = pairwise_distances(x_tr, Y=X, n_jobs=-1)
+            neighbors_k_vs = pairwise_distances(x_tr, Y=X_red, n_jobs=-1)
             neighbors_k_vs.sort(0)
             similarity_vs = neighbors_k_vs
             cpd_value_vs = similarity_vs[0, :]
@@ -186,7 +199,7 @@ if files_option == 'SMILES':
 
               
         # Search for substructures and calculation of the Tanimoto index
-        substructures_df = pd.read_csv("datasets/unwanted_substructures.csv", sep="\s+")
+        substructures_df = pd.read_csv("datasets/vip_substructures.csv", sep="\s+")
         # Converting SMARTS substructures into RDKit molecules
         substructure_mols = [(row['name'], Chem.MolFromSmarts(row['smarts'])) for _, row in substructures_df.iterrows()]
         # Creating a topological fingerprint for the original molecule
@@ -208,7 +221,8 @@ if files_option == 'SMILES':
                 st.write(f"The found fragment: {name}")
 
                 # Calculating the Tanimoto coefficient
-                sub_fp = FingerprintMols.FingerprintMol(substructure)
+                substructure_mol = Chem.MolFromSmarts(substructures_df[substructures_df['name'] == name]['smarts'].values[0])
+                sub_fp = FingerprintMols.FingerprintMol(substructure_mol)
                 tanimoto_similarity = DataStructs.TanimotoSimilarity(mol_fp, sub_fp)
                 st.write(f"Tanimoto coefficient: {tanimoto_similarity:.2f}")
 
